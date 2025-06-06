@@ -1,0 +1,5 @@
+venv/
+.venv/
+__pycache__/
+captures
+drive-download-20250602T113000Z-1-001
