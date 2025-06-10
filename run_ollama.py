@@ -6,12 +6,12 @@ from zoneinfo import ZoneInfo
 from ollama import chat
 from ollama import ChatResponse
 import requests
-import pyttsx3
+# import pyttsx3
 from typing import Dict
 
-_tts_engine = pyttsx3.init()
-_tts_engine.setProperty("rate", 180)       # words-per-minute
-_tts_engine.setProperty("volume", 0.9)
+# _tts_engine = pyttsx3.init()
+# _tts_engine.setProperty("rate", 180)       # words-per-minute
+# _tts_engine.setProperty("volume", 0.9)
 
 SYSTEM_PROMPT = """
 You are **NavPilot**, an embodied-AI assistant that controls a wheeled indoor robot.
@@ -29,6 +29,7 @@ You are **NavPilot**, an embodied-AI assistant that controls a wheeled indoor ro
 - Always avoid collisions: If the forward distance sensor reports any object ≤ 0.50 m straight ahead, do not move forward. Instead, choose a different heading (rotate or reverse) to maintain a safe clearance.
 - The safe distance that you can choose to travel is the one from the distance sensor minus 0.5 meters (distance - 0.5).
 - Do not output [0,0] unless you intend to stay still.
+- You should incorporate the previously outputed commands (memory) into your decision-making.
 
 ### Output format  
 Return **exactly three separate lines without any ``` on the first line**:  
@@ -41,20 +42,20 @@ USER_PROMPT1 = "Find your way out of the room. The exit is a glass door"
 USER_PROMPT2 = "Find your way out of the room. The distance between you and the bag is 0.5 meters."
 USER_PROMPT3 = "Rotate right 90 degrees"
 
-assistant_history = []
+# assistant_history = []
 
-def say(text: str, wait: bool = True) -> None:
-    """
-    Speak *text* aloud.  If `wait` is False the call returns
-    immediately and audio plays in the background.
-    """
-    _tts_engine.say(text)
-    if wait:
-        _tts_engine.runAndWait()
-    else:
-        # run non-blocking in a worker thread
-        import threading
-        threading.Thread(target=_tts_engine.runAndWait, daemon=True).start()
+# def say(text: str, wait: bool = True) -> None:
+#     """
+#     Speak *text* aloud.  If `wait` is False the call returns
+#     immediately and audio plays in the background.
+#     """
+#     _tts_engine.say(text)
+#     if wait:
+#         _tts_engine.runAndWait()
+#     else:
+#         # run non-blocking in a worker thread
+#         import threading
+#         threading.Thread(target=_tts_engine.runAndWait, daemon=True).start()
 
 # def get_center_distance():
 #     try:
@@ -164,13 +165,17 @@ assistant_history: list[str] = []
 
 def call_ollama(image_path: str) -> bool:
     distance = fetch_center_distance()
+    # distance = 2.0  # For testing, use a fixed distance
     
     # 1) Build your user prompt as before
     USER_PROMPT = (
+        f"history of previously executed commands(memory): {assistant_history}. "
         f"Find your way out of the room. The exit is a glass door. "
         f"The distance to the closest object is {distance:.2f} meters. "
         f"If the distance is 0 it means that there is an object 15 cm or less of it"
     )
+    
+    print(USER_PROMPT)
     
     # 2) Assemble the messages list, injecting the last N assistant outputs
     messages = [
@@ -191,9 +196,12 @@ def call_ollama(image_path: str) -> bool:
         model='gemma3:12b',
         messages=messages,
     )
+
     
     # 4) Save the raw assistant output into history BEFORE any post-processing
-    assistant_history.append(response.message.content)
+    assistant_history.append("one command I already executed" + response.message.content + " ")
+    
+    print("assistant_history", assistant_history)
     
     # 5) Your existing parsing logic
     print(response.message.content)
@@ -202,7 +210,7 @@ def call_ollama(image_path: str) -> bool:
     command_arr = ast.literal_eval(lines[0])      # [x, theta]
     reasoning   = "\n".join(lines[2:]).upper()    # easier case-insensitive search
     
-    say("response: " + response.message.content, wait=False)
+    # say("response: " + response.message.content, wait=False)
     
     print("reasoning", reasoning)
     print("before", command_arr)
@@ -219,6 +227,7 @@ def call_ollama(image_path: str) -> bool:
         proceed = input("Proceed with command? y|n ").strip().lower() == "y"
         if proceed:
             send_move_command(command_arr)
+            # print("move")
         return proceed
     return False
 
@@ -234,6 +243,11 @@ if __name__ == "__main__":
       time.sleep(2)
       img_path = fetch_image()
       flag = call_ollama(img_path)
+
+#   i = 5
+#   while i > 0:
+#     call_ollama("img1.jpg")
+#     i -= 1
 
   #send_move_command([1,0], api_url="http://192.168.4.1:5000/move")
   #fetch_center_distance()
