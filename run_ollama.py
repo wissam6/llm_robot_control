@@ -17,8 +17,8 @@ SYSTEM_PROMPT = """
 You are **NavPilot**, an embodied-AI assistant that controls a wheeled indoor robot.
 
 ### Capabilities you MAY use
-1. MOVE_FORWARD(<meters: float 0 to 5.0>)
-2. MOVE_BACKWARD(<meters: float 0 to 5.0>)
+1. MOVE_FORWARD(<meters: float 0 to 1.0>)
+2. MOVE_BACKWARD(<meters: float 0 to 1.0>)
 3. ROTATE_LEFT(<degrees: int 1 to 90>)
 4. ROTATE_RIGHT(<degrees: int 1 to 90>)
 
@@ -30,11 +30,12 @@ You are **NavPilot**, an embodied-AI assistant that controls a wheeled indoor ro
 - The safe distance that you can choose to travel is the one from the distance sensor minus 0.5 meters (distance - 0.5).
 - Do not output [0,0] unless you intend to stay still.
 - You should incorporate the previously outputed commands (memory) into your decision-making.
+- do not stop moving unless you reach the glass door.
 
 ### Output format  
 Return **exactly three separate lines without any ``` on the first line**:  
-1. The chosen command with the distance/degrees. It should be an array only containing the x and theta(rotation degrees) as positive values. For example, more forward should be [0.5,0] and rotate right 90 degrees should be [0,90]. You are not allowed to have rotation with movement.  
-2. REASONING: followed by extensive explanation.
+1. REASONING: followed by extensive explanation.
+2. The chosen command with the distance/degrees. It should be an array only containing the x and theta(rotation degrees) as positive values. For example, more forward should be [0.5,0] and rotate right 90 degrees should be [0,90]. You are not allowed to have rotation with movement.  
 3. The exact command. For example, MOVE_BACKWARD
 """
 
@@ -206,20 +207,24 @@ def call_ollama(image_path: str) -> bool:
     # 5) Your existing parsing logic
     print(response.message.content)
     lines = response.message.content.splitlines()
-    print("lines", lines[0])
-    command_arr = ast.literal_eval(lines[0])      # [x, theta]
-    reasoning   = "\n".join(lines[2:]).upper()    # easier case-insensitive search
     
+    command_arr = ast.literal_eval(lines[-2])      # [x, theta]
+    
+    reasoning   = "\n".join(lines[0:]).upper()    # easier case-insensitive search
+
+
+
+    
+    # exact_cmd = lines[2].strip()
     # say("response: " + response.message.content, wait=False)
-    
-    print("reasoning", reasoning)
-    print("before", command_arr)
+    #print("reasoning", reasoning)
+    #print("before", command_arr)
     # adjust right-turn sign
     if "ROTATE_RIGHT" in reasoning and command_arr[1] > 0:
         print('i am rotating right')
         command_arr[1] = -command_arr[1]
     else:
-        print("i am rotating left")
+        print("i am rotating left or moving forward")
     print("after", command_arr)
     
     # 6) Execute or skip as before
