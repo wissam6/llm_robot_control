@@ -41,6 +41,8 @@ USER_PROMPT1 = "Find your way out of the room. The exit is a glass door"
 USER_PROMPT2 = "Find your way out of the room. The distance between you and the bag is 0.5 meters."
 USER_PROMPT3 = "Rotate right 90 degrees"
 
+assistant_history = []
+
 def say(text: str, wait: bool = True) -> None:
     """
     Speak *text* aloud.  If `wait` is False the call returns
@@ -157,25 +159,43 @@ def send_move_command(command, api_url="http://192.168.4.1:5000/move"):
         print(f"Error sending command '{command}': {e}")
 
 
-# runs gemma3 and sends the motion command.
+# At module level
+assistant_history: list[str] = []
+
 def call_ollama(image_path: str) -> bool:
-    
-    
     distance = fetch_center_distance()
+    
+    # 1) Build your user prompt as before
     USER_PROMPT = (
-    f"Find your way out of the room. The exit is a glass door. "
-    f"The distance to the closest object is {distance:.2f} meters."
-    f"If the distance is 0 it means that there is an object 15 cm or less of it"
+        f"Find your way out of the room. The exit is a glass door. "
+        f"The distance to the closest object is {distance:.2f} meters. "
+        f"If the distance is 0 it means that there is an object 15 cm or less of it"
     )
     
+    # 2) Assemble the messages list, injecting the last N assistant outputs
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT}
+    ]
+    # keep only the last 5 for context (tune as needed)
+    for prev in assistant_history[-5:]:
+        messages.append({"role": "assistant", "content": prev})
+    
+    messages.append({
+        "role": "user",
+        "content": USER_PROMPT,
+        "images": [image_path]
+    })
+    
+    # 3) Call Ollama with full context
     response: ChatResponse = chat(
         model='gemma3:12b',
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": USER_PROMPT, "images": [image_path]},
-        ],
+        messages=messages,
     )
-
+    
+    # 4) Save the raw assistant output into history BEFORE any post-processing
+    assistant_history.append(response.message.content)
+    
+    # 5) Your existing parsing logic
     print(response.message.content)
     lines = response.message.content.splitlines()
     print("lines", lines[0])
@@ -183,19 +203,18 @@ def call_ollama(image_path: str) -> bool:
     reasoning   = "\n".join(lines[2:]).upper()    # easier case-insensitive search
     
     say("response: " + response.message.content, wait=False)
-
+    
     print("reasoning", reasoning)
-    print("before",command_arr)
-    # --- make right turns negative ---------------------------------
+    print("before", command_arr)
+    # adjust right-turn sign
     if "ROTATE_RIGHT" in reasoning and command_arr[1] > 0:
         print('i am rotating right')
         command_arr[1] = -command_arr[1]
     else:
-      print("i am rotating left")
-      
-    print("after",command_arr)
-    # ----------------------------------------------------------------
-
+        print("i am rotating left")
+    print("after", command_arr)
+    
+    # 6) Execute or skip as before
     if any(c != 0 for c in command_arr):
         proceed = input("Proceed with command? y|n ").strip().lower() == "y"
         if proceed:
