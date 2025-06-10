@@ -1,0 +1,28 @@
+[
+  {
+    "image": "img1.jpg",
+    "command": [
+      0,
+      -45
+    ],
+    "reasoning": "REASONING:The closest obstacle is 2.00 m ahead, and I need to map the surrounding area to find the exit. Since I cannot move forward, I will rotate 45 degrees to the right to scan a new viewpoint and explore the area to the right. This rotation allows me to potentially identify new pathways or obstacles, ultimately helping me locate the glass door.\nROTATE_RIGHT",
+    "pose": {
+      "x": 0.0,
+      "y": 0.0,
+      "heading": 315.0
+    }
+  },
+  {
+    "image": "img3.jpg",
+    "command": [
+      0,
+      -90
+    ],
+    "reasoning": "REASONING: The closest obstacle is 2.00 m ahead, which is too far to move forward. Instead, I will rotate 90 degrees to the right to explore a new area. This will provide a broader view and potentially reveal the exit or other obstacles. This rotation will allow me to gather more information about the environment. \nROTATE_RIGHT(90)",
+    "pose": {
+      "x": 0.0,
+      "y": 0.0,
+      "heading": 270.0
+    }
+  }
+]
