@@ -19,29 +19,26 @@ You are **NavPilot**, an embodied-AI assistant that controls a wheeled indoor ro
 ### Capabilities you MAY use
 1. MOVE_FORWARD(<meters: float 0 to 1.0>)
 2. MOVE_BACKWARD(<meters: float 0 to 1.0>)
-3. ROTATE_LEFT(<degrees: int 1 to 90>)
-4. ROTATE_RIGHT(<degrees: int 1 to 90>)
+3. ROTATE_LEFT(<degrees: int 45>)
+4. ROTATE_RIGHT(<degrees: int 45>)
 
 ### Constraints
 - in your output dont inlcude ```
 - do not go under the tables
 - do not do any numeric ordering for the output
-- Always avoid collisions: If the forward distance sensor reports any object ≤ 0.50 m straight ahead, do not move forward. Instead, choose a different heading (rotate or reverse) to maintain a safe clearance.
-- The safe distance that you can choose to travel is the one from the distance sensor minus 0.5 meters (distance - 0.5).
+- Always avoid collisions: If the forward distance sensor reports any object ≤ 0.50 meters straight ahead, do not move forward. Instead, choose a different heading (rotate or reverse) to maintain a safe clearance.
+- Make sure to not go over the maximum allowed distance that is 1 meter for forward movement.
 - Do not output [0,0] unless you intend to stay still.
 - You should incorporate the previously outputed commands (memory) into your decision-making.
 - do not stop moving unless you reach the glass door.
+- the maximum safe distance is the one given by the image depth sensor - 0.5
 
 ### Output format  
 Return **exactly three separate lines without any ``` on the first line**:  
-1. REASONING: followed by extensive explanation.
+1. REASONING: detailed image description and extensive explanation of the chosen command.
 2. The chosen command with the distance/degrees. It should be an array only containing the x and theta(rotation degrees) as positive values. For example, more forward should be [0.5,0] and rotate right 90 degrees should be [0,90]. You are not allowed to have rotation with movement.  
 3. The exact command. For example, MOVE_BACKWARD
 """
-
-USER_PROMPT1 = "Find your way out of the room. The exit is a glass door"
-USER_PROMPT2 = "Find your way out of the room. The distance between you and the bag is 0.5 meters."
-USER_PROMPT3 = "Rotate right 90 degrees"
 
 # assistant_history = []
 
@@ -165,26 +162,31 @@ def send_move_command(command, api_url="http://192.168.4.1:5000/move"):
 assistant_history: list[str] = []
 
 def call_ollama(image_path: str) -> bool:
-    distance = fetch_center_distance()
+    distance = fetch_center_distance()-0.5
+    #distanceAll = fetch_all_distances()
     # distance = 2.0  # For testing, use a fixed distance
+    
+        # 2) Assemble the messages list, injecting the last N assistant outputs
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT}
+    ]
+    
+    # keep only the last 5 for context (tune as needed)
+    for prev in assistant_history[-5:]:
+        messages.append({"role": "assistant", "content": prev})
     
     # 1) Build your user prompt as before
     USER_PROMPT = (
         f"history of previously executed commands(memory): {assistant_history}. "
-        f"Find your way out of the room. The exit is a glass door. "
-        f"The distance to the closest object is {distance:.2f} meters. "
-        f"If the distance is 0 it means that there is an object 15 cm or less of it"
+        f"The distance to the closest object is {distance:.2f} meters. Do not move forward if less than 0.5."
+        f"Analyze what you can see on the image first. "
+        f"If you moved forward for multiple steps, maybe rotating might be useful to get a clearer view."
+        f"Then find your way out of the room. The exit is a glass door. This is your main goal and final destination. "
     )
     
     print(USER_PROMPT)
     
-    # 2) Assemble the messages list, injecting the last N assistant outputs
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT}
-    ]
-    # keep only the last 5 for context (tune as needed)
-    for prev in assistant_history[-5:]:
-        messages.append({"role": "assistant", "content": prev})
+
     
     messages.append({
         "role": "user",
@@ -200,7 +202,7 @@ def call_ollama(image_path: str) -> bool:
 
     
     # 4) Save the raw assistant output into history BEFORE any post-processing
-    assistant_history.append("one command I already executed" + response.message.content + " ")
+    assistant_history.append("one command I already executed: " + response.message.content + " ")
     
     print("assistant_history", assistant_history)
     
